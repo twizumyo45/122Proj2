@@ -176,7 +176,12 @@ def edit_distance_matrix(ref, donor):
     """
 
     output_matrix = np.zeros((len(ref), len(donor)))
-    # print len(ref), len(donor)
+
+    #0=snp/match 1=del 2=ins
+    output_matrix_tracker = np.zeros((len(ref), len(donor)))
+
+    #EDIT: trying to implement a rudimentary affine gap
+
     # print output_matrix
     # This is a very fast and memory-efficient way to allocate a matrix
     for i in range(len(ref)):
@@ -189,7 +194,8 @@ def edit_distance_matrix(ref, donor):
             insertion = output_matrix[i, j - 1] + 1
             identity = output_matrix[i - 1, j - 1] if ref[i] == donor[j] else np.inf
             substitution = output_matrix[i - 1, j - 1] + 1 if ref[i] != donor[j] else np.inf
-            output_matrix[i, j] = min(insertion, deletion, identity, substitution)
+            minimum = min(insertion, deletion, identity, substitution)
+            output_matrix[i, j] = minimum
     return output_matrix
 
 
@@ -287,12 +293,12 @@ def identify_changes(ref, donor, offset):
     changes = sorted(changes, key=lambda change: change[-1])
 
     #EDIT: toss if too many changes in a 100 block
-    if (len(changes) > 3):
+    if (len(changes) > 4):
          return []
 
     #EDIT: if 2 SNPs in a row, then bail
     for k in range(1, len(changes)):
-        if (changes[k][0]=='SNP' and changes[k-1][0]=='SNP' and changes[k][3]==changes[k-1][3]):
+        if (changes[k][0]=='SNP' and changes[k-1][0]=='SNP' and changes[k][3]-1==changes[k-1][3]):
             return []
 
 
