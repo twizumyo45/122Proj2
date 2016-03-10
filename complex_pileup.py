@@ -40,6 +40,7 @@ def generate_pileup(aligned_fn):
             snpsCleaned.append(snps[i])
     insertions = [v for v in changes if v[0] == 'INS']
     deletions = [v for v in changes if v[0] == 'DEL']
+
     return snpsCleaned, insertions, deletions
 
 
@@ -87,7 +88,7 @@ def align_to_donor(donor, read):
         best_read = read
         best_score = score
 
-    for shift_amount in range(-3, 0) + range(1, 4):  # This can be improved
+    for shift_amount in range(-4, 0) + range(1, 5):  # This can be improved
         if shift_amount > 0:
             shifted_read = ' ' * shift_amount + read
         elif shift_amount < 0:
@@ -139,6 +140,7 @@ def generate_donor(ref, aligned_reads):
         longest_read = padded_reads[read_scores.index(max(read_scores))]
     donor_genome = longest_read
 
+    #EDIT: toss out worse reads
     # While there are reads that haven't been aligned, try to align them to the donor.
     while padded_reads:
         un_donored_reads = []
@@ -176,11 +178,6 @@ def edit_distance_matrix(ref, donor):
     """
 
     output_matrix = np.zeros((len(ref), len(donor)))
-
-    #0=snp/match 1=del 2=ins
-    output_matrix_tracker = np.zeros((len(ref), len(donor)))
-
-    #EDIT: trying to implement a rudimentary affine gap
 
     # print output_matrix
     # This is a very fast and memory-efficient way to allocate a matrix
@@ -263,16 +260,11 @@ def identify_changes(ref, donor, offset):
         if min_dist == identity_dist:
             current_row = pvs_row
             current_column = pvs_column
-        elif min_dist == substitution_dist:
-            changes.append(['SNP', ref[current_row], donor[current_column], ref_index])
-            current_row = pvs_row
-            current_column = pvs_column
-            n_snp += 1
         elif min_dist == insertion_dist:
             if len(changes) > 0 and changes[-1][0] == 'INS' and changes[-1][-1] == ref_index + 1:
                 changes[-1][1] = donor[current_column] + changes[-1][1]
                 #EDIT: toss out long ins
-                if (len (changes[-1][1]) > 5):
+                if (len (changes[-1][1]) >= 5):
                     return []
             else:
                 changes.append(['INS', donor[current_column], ref_index + 1])
@@ -282,25 +274,24 @@ def identify_changes(ref, donor, offset):
             if len(changes) > 0 and changes[-1][0] == 'DEL' and changes[-1][-1] == ref_index + 1:
                 changes[-1] = ['DEL', ref[current_row] + changes[-1][1], ref_index]
                 #EDIT: toss out long dels
-                if (len (changes[-1][1]) > 5):
+                if (len (changes[-1][1]) >= 5):
                     return []
             else:
                 changes.append(['DEL', ref[current_row], ref_index])
                 n_del +=1
             current_row = pvs_row
+        elif min_dist == substitution_dist:
+            changes.append(['SNP', ref[current_row], donor[current_column], ref_index])
+            current_row = pvs_row
+            current_column = pvs_column
+            n_snp += 1
         else:
             raise ValueError
     changes = sorted(changes, key=lambda change: change[-1])
 
     #EDIT: toss if too many changes in a 100 block
-    if (len(changes) > 4):
+    if (len(changes) > 6):
          return []
-
-    #EDIT: if 2 SNPs in a row, then bail
-    for k in range(1, len(changes)):
-        if (changes[k][0]=='SNP' and changes[k-1][0]=='SNP' and changes[k][3]-1==changes[k-1][3]):
-            return []
-
 
     print str(changes)
     return changes
@@ -375,10 +366,10 @@ if __name__ == "__main__":
         for x in deletions:
             output_file.write(','.join([str(u) for u in x[1:]]) + '\n')
 
-
-    identify_changes(ref='ACACCC', donor='ATACCCGGG', offset=0)
-    identify_changes(ref='ATACCCGGG', donor='ACACCC', offset=0)
-    identify_changes(ref='ACACCC', donor='GGGATACCC', offset=0)
-    identify_changes(ref='ACA', donor='AGA', offset=0)
-    identify_changes(ref='ACA', donor='ACGTA', offset=0)
-    identify_changes(ref='TTACCGTGCAAGCG', donor='GCACCCAAGTTCG', offset=0)
+    #swapped order so as to favor ins/del: worked
+    #increase bound of allowed changes per 100 up to 5: worked
+    #make it so the shift amt doesnt matter: no change
+    #increase shifting range: no change
+    #increase bound of allowed changes per 100 up to 6: slightly worked
+    #allow ins/del >= 5 (raised it up): slightly worked
+    #fix boundaries?? so merge adjacent ins/del that get separated by the bounds: no change
